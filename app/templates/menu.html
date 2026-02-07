@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Menu - Restro3D{% endblock %}
+
+{% block extra_head %}
+<!-- Model Viewer - Google's 3D/AR component that works on all devices -->
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js"></script>
+<link rel="stylesheet" href="/static/css/menu.css">
+{% endblock %}
+
+{% block content %}
+<div class="menu-container">
+    <div class="restaurant-header">
+        <div id="restaurant-info">
+            <div class="loading">
+                <i class="fas fa-spinner fa-spin"></i> Loading restaurant...
+            </div>
+        </div>
+    </div>
+    
+    <div class="category-filter" id="category-filter" style="display: none;">
+        <button class="category-btn active" data-category="">All</button>
+    </div>
+    
+    <div class="menu-grid" id="menu-grid">
+        <div class="loading">
+            <i class="fas fa-spinner fa-spin"></i> Loading menu...
+        </div>
+    </div>
+</div>
+
+<!-- AR Modal -->
+<div id="ar-modal" class="ar-modal">
+    <div class="ar-modal-content">
+        <div class="ar-modal-header">
+            <h2 id="ar-modal-title">View in AR</h2>
+            <button class="close-modal" onclick="closeARModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="ar-viewer-container">
+            <model-viewer
+                id="ar-viewer"
+                src=""
+                ar
+                ar-modes="webxr scene-viewer quick-look"
+                camera-controls
+                touch-action="pan-y"
+                auto-rotate
+                shadow-intensity="1"
+                environment-image="neutral"
+                exposure="1"
+                alt="Food Item 3D Model"
+                loading="eager"
+                reveal="auto"
+            >
+                <div class="ar-instructions" slot="progress-bar" style="display: none;">
+                    <p><strong>💡 Loading 3D model...</strong></p>
+                </div>
+                <button slot="ar-button" class="view-ar-btn" style="position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 10;">
+                    <i class="fas fa-camera"></i> View in Your Space
+                </button>
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: white; background: rgba(0,0,0,0.7); padding: 2rem; border-radius: 12px; max-width: 80%;">
+                    <p><strong>💡 How to use:</strong></p>
+                    <p>• Drag to rotate the 3D model</p>
+                    <p>• Pinch to zoom in/out</p>
+                    <p>• Tap "View in Your Space" below to place it on your table!</p>
+                </div>
+            </model-viewer>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const restaurantId = "{{ restaurant_id }}";
+let currentCategory = "";
+let menuItems = [];
+
+// Load restaurant info
+async function loadRestaurant() {
+    try {
+        const response = await fetch(`/api/restaurants/${restaurantId}`);
+        if (!response.ok) throw new Error('Restaurant not found');
+        
+        const restaurant = await response.json();
+        
+        document.getElementById('restaurant-info').innerHTML = `
+            ${restaurant.logo_url ? `<img src="${restaurant.logo_url}" alt="${restaurant.name}" class="restaurant-logo">` : ''}
+            <h1>${restaurant.name}</h1>
+            ${restaurant.description ? `<p>${restaurant.description}</p>` : ''}
+            ${restaurant.address ? `<p><i class="fas fa-map-marker-alt"></i> ${restaurant.address}</p>` : ''}
+            ${restaurant.contact_phone ? `<p><i class="fas fa-phone"></i> ${restaurant.contact_phone}</p>` : ''}
+        `;
+    } catch (error) {
+        document.getElementById('restaurant-info').innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-circle"></i>
+                <p>Restaurant not found</p>
+            </div>
+        `;
+    }
+}
+
+// Load menu items
+async function loadMenuItems() {
+    try {
+        const response = await fetch(`/api/restaurants/${restaurantId}/menu-items`);
+        if (!response.ok) throw new Error('Failed to load menu');
+        
+        menuItems = await response.json();
+        
+        if (menuItems.length === 0) {
+            document.getElementById('menu-grid').innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-utensils"></i>
+                    <p>No menu items available yet</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Get unique categories
+        const categories = [...new Set(menuItems.map(item => item.category).filter(Boolean))];
+        
+        if (categories.length > 0) {
+            const filterHtml = `
+                <button class="category-btn active" data-category="" onclick="filterByCategory('')">All</button>
+                ${categories.map(cat => `
+                    <button class="category-btn" data-category="${cat}" onclick="filterByCategory('${cat}')">${cat}</button>
+                `).join('')}
+            `;
+            document.getElementById('category-filter').innerHTML = filterHtml;
+            document.getElementById('category-filter').style.display = 'flex';
+        }
+        
+        renderMenuItems();
+    } catch (error) {
+        document.getElementById('menu-grid').innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-circle"></i>
+                <p>Error loading menu</p>
+            </div>
+        `;
+    }
+}
+
+function renderMenuItems() {
+    const filtered = currentCategory
+        ? menuItems.filter(item => item.category === currentCategory)
+        : menuItems;
+    
+    if (filtered.length === 0) {
+        document.getElementById('menu-grid').innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-search"></i>
+                <p>No items in this category</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = filtered.map(item => `
+        <div class="menu-card" onclick="openARViewer('${item.id}', '${item.name}', '${item.glb_file_url}')">
+            ${item.image_url ? `<img src="${item.image_url}" alt="${item.name}" class="menu-card-image">` : ''}
+            <div class="menu-card-content">
+                ${item.category ? `<span class="menu-card-category">${item.category}</span>` : ''}
+                <div class="menu-card-header">
+                    <h3 class="menu-card-title">${item.name}</h3>
+                    <div class="menu-card-price">$${item.price.toFixed(2)}</div>
+                </div>
+                ${item.description ? `<p class="menu-card-description">${item.description}</p>` : ''}
+                <button class="view-ar-btn" onclick="event.stopPropagation(); openARViewer('${item.id}', '${item.name}', '${item.glb_file_url}')">
+                    <i class="fas fa-cube"></i> View in 3D/AR
+                </button>
+            </div>
+        </div>
+    `).join('');
+    
+    document.getElementById('menu-grid').innerHTML = html;
+}
+
+function filterByCategory(category) {
+    currentCategory = category;
+    
+    // Update active button
+    document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.category === category) {
+            btn.classList.add('active');
+        }
+    });
+    
+    renderMenuItems();
+}
+
+function openARViewer(itemId, itemName, glbUrl) {
+    const modal = document.getElementById('ar-modal');
+    const viewer = document.getElementById('ar-viewer');
+    const title = document.getElementById('ar-modal-title');
+    
+    console.log('Opening AR viewer for:', itemName);
+    console.log('GLB URL:', glbUrl);
+    
+    title.textContent = itemName;
+    
+    // Set the GLB source
+    viewer.setAttribute('src', glbUrl);
+    
+    // Show modal
+    modal.classList.add('active');
+    
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+    
+    // Listen for model load events
+    viewer.addEventListener('load', () => {
+        console.log('3D model loaded successfully');
+    }, { once: true });
+    
+    viewer.addEventListener('error', (error) => {
+        console.error('Error loading 3D model:', error);
+        alert('Error loading 3D model. Please check if the GLB file is valid.');
+    }, { once: true });
+}
+
+function closeARModal() {
+    const modal = document.getElementById('ar-modal');
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    loadRestaurant();
+    loadMenuItems();
+});
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeARModal();
+    }
+});
+</script>
+{% endblock %}

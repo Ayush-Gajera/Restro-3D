@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Restro3D{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/admin.css">
+{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+    <div class="admin-header">
+        <h1>Restaurant Dashboard</h1>
+        <p>Manage your restaurants and menu items</p>
+    </div>
+    
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('restaurants')">
+            <i class="fas fa-store"></i> Restaurants
+        </button>
+        <button class="tab" onclick="switchTab('menu')">
+            <i class="fas fa-utensils"></i> Menu Items
+        </button>
+    </div>
+    
+    <!-- Restaurants Tab -->
+    <div id="restaurants-tab" class="tab-content active">
+        <div class="card">
+            <h2>Add New Restaurant</h2>
+            <form id="restaurant-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="restaurant-name">Restaurant Name *</label>
+                    <input type="text" id="restaurant-name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="restaurant-description">Description</label>
+                    <textarea id="restaurant-description" name="description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="restaurant-email">Contact Email</label>
+                    <input type="email" id="restaurant-email" name="contact_email">
+                </div>
+                <div class="form-group">
+                    <label for="restaurant-phone">Contact Phone</label>
+                    <input type="tel" id="restaurant-phone" name="contact_phone">
+                </div>
+                <div class="form-group">
+                    <label for="restaurant-address">Address</label>
+                    <textarea id="restaurant-address" name="address"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Logo (Optional)</label>
+                    <div class="file-upload" onclick="document.getElementById('restaurant-logo').click()">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Click to upload logo</p>
+                        <input type="file" id="restaurant-logo" name="logo" accept="image/*">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Create Restaurant
+                </button>
+            </form>
+        </div>
+        
+        <div class="card">
+            <h2>Your Restaurants</h2>
+            <div id="restaurant-list" class="restaurant-list">
+                <div class="loading">
+                    <i class="fas fa-spinner fa-spin"></i> Loading restaurants...
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Menu Items Tab -->
+    <div id="menu-tab" class="tab-content">
+        <div class="card">
+            <h2>Add New Menu Item</h2>
+            <form id="menu-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="menu-restaurant">Select Restaurant *</label>
+                    <select id="menu-restaurant" name="restaurant_id" required>
+                        <option value="">-- Select Restaurant --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="menu-name">Item Name *</label>
+                    <input type="text" id="menu-name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="menu-price">Price *</label>
+                    <input type="number" id="menu-price" name="price" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="menu-category">Category</label>
+                    <select id="menu-category" name="category">
+                        <option value="">-- Select Category --</option>
+                        <option value="Appetizer">Appetizer</option>
+                        <option value="Main Course">Main Course</option>
+                        <option value="Dessert">Dessert</option>
+                        <option value="Beverage">Beverage</option>
+                        <option value="Side Dish">Side Dish</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="menu-description">Description</label>
+                    <textarea id="menu-description" name="description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="menu-scale">Scale Factor (Default: 1.0)</label>
+                    <input type="number" id="menu-scale" name="scale_factor" step="0.1" value="1.0">
+                </div>
+                <div class="form-group">
+                    <label>3D Model (GLB File) *</label>
+                    <div class="file-upload" onclick="document.getElementById('menu-glb').click()">
+                        <i class="fas fa-cube"></i>
+                        <p>Click to upload GLB file</p>
+                        <input type="file" id="menu-glb" name="glb_file" accept=".glb" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Preview Image (Optional)</label>
+                    <div class="file-upload" onclick="document.getElementById('menu-image').click()">
+                        <i class="fas fa-image"></i>
+                        <p>Click to upload image</p>
+                        <input type="file" id="menu-image" name="image" accept="image/*">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Add Menu Item
+                </button>
+            </form>
+        </div>
+        
+        <div class="card">
+            <h2>Menu Items</h2>
+            <div class="form-group">
+                <label for="filter-restaurant">Filter by Restaurant</label>
+                <select id="filter-restaurant" onchange="loadMenuItems()">
+                    <option value="">-- All Restaurants --</option>
+                </select>
+            </div>
+            <div id="menu-list" class="menu-list">
+                <div class="loading">
+                    <i class="fas fa-spinner fa-spin"></i> Loading menu items...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- QR Code Modal -->
+<div id="qr-modal" class="qr-modal">
+    <div class="qr-modal-content">
+        <h2>Restaurant QR Code</h2>
+        <img id="qr-image" src="" alt="QR Code">
+        <p id="qr-url"></p>
+        <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1rem;">
+            <button class="btn btn-primary" onclick="downloadQR()">
+                <i class="fas fa-download"></i> Download
+            </button>
+            <button class="btn btn-secondary" onclick="closeQRModal()">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/admin.js"></script>
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Restro3D - AR Restaurant Menus{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <div class="container">
+        <div class="hero-content">
+            <h1>Welcome to Restro3D</h1>
+            <p class="subtitle">Experience restaurant menus in augmented reality</p>
+            <div class="hero-features">
+                <div class="feature">
+                    <i class="fas fa-mobile-alt"></i>
+                    <h3>Scan QR Code</h3>
+                    <p>Customers scan the QR code on your table</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-cube"></i>
+                    <h3>View in 3D/AR</h3>
+                    <p>See realistic 3D models of dishes</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-check-circle"></i>
+                    <h3>Make Informed Choices</h3>
+                    <p>Know exactly what you're ordering</p>
+                </div>
+            </div>
+            <div class="cta-buttons">
+                <a href="/admin" class="btn btn-primary">Restaurant Dashboard</a>
+                <a href="#how-it-works" class="btn btn-secondary">Learn More</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section id="how-it-works" class="section">
+    <div class="container">
+        <h2 class="section-title">How It Works</h2>
+        <div class="steps">
+            <div class="step">
+                <div class="step-number">1</div>
+                <h3>Restaurant Setup</h3>
+                <p>Create your restaurant profile and upload menu items with 3D models</p>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <h3>Generate QR Code</h3>
+                <p>Get a unique QR code for your restaurant to place on tables</p>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <h3>Customers Scan</h3>
+                <p>Diners scan the code and view your menu in AR</p>
+            </div>
+            <div class="step">
+                <div class="step-number">4</div>
+                <h3>See Before Ordering</h3>
+                <p>They can see exactly how the dish looks before ordering</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section bg-light">
+    <div class="container">
+        <h2 class="section-title">Compatible with All Devices</h2>
+        <p class="text-center">Works on iOS, Android, and any smartphone - no special AR sensors required!</p>
+        <div class="device-support">
+            <div class="device">
+                <i class="fab fa-apple"></i>
+                <p>iPhone</p>
+            </div>
+            <div class="device">
+                <i class="fab fa-android"></i>
+                <p>Android</p>
+            </div>
+            <div class="device">
+                <i class="fas fa-tablet-alt"></i>
+                <p>Tablets</p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

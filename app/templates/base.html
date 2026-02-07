@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Restro3D{% endblock %}</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="logo">
+                <i class="fas fa-utensils"></i>
+                Restro3D
+            </a>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/admin">Admin</a>
+            </div>
+        </div>
+    </nav>
+    
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 Restro3D. Bringing menus to life with AR.</p>
+        </div>
+    </footer>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
