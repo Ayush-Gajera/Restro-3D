@@ -127,10 +127,10 @@ python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 The `.env` file contains all configuration:
 
 ```env
-# Supabase (already configured)
-SUPABASE_URL=https://ussbilgvodjabmzwenun.supabase.co
-SUPABASE_KEY=sb_publishable_ZfRTijsVAsQkRUcdIv3aQQ__FsOMAOw
-SUPABASE_DB_URL=postgresql://postgres:26h0VZVkzl5MMaoZ@db.ussbilgvodjabmzwenun.supabase.co:5432/postgres
+# Supabase - GET YOUR OWN FROM SUPABASE.COM
+SUPABASE_URL=your-supabase-project-url
+SUPABASE_KEY=your-supabase-publishable-key
+SUPABASE_DB_URL=your-supabase-database-connection-string
 
 # Application
 APP_NAME=Restro3D
