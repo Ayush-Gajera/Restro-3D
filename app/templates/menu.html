@@ -44,7 +44,6 @@
                 src=""
                 ar
                 ar-modes="webxr scene-viewer quick-look"
-                camera-controls
                 touch-action="pan-y"
                 auto-rotate
                 shadow-intensity="1"
@@ -53,6 +52,11 @@
                 alt="Food Item 3D Model"
                 loading="eager"
                 reveal="auto"
+                disable-zoom
+                camera-orbit="0deg 75deg 1.5m"
+                min-camera-orbit="auto auto 1.5m"
+                max-camera-orbit="auto auto 1.5m"
+                interaction-prompt="none"
             >
                 <div class="ar-instructions" slot="progress-bar" style="display: none;">
                     <p><strong>💡 Loading 3D model...</strong></p>
@@ -63,8 +67,8 @@
                 <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: white; background: rgba(0,0,0,0.7); padding: 2rem; border-radius: 12px; max-width: 80%;">
                     <p><strong>💡 How to use:</strong></p>
                     <p>• Drag to rotate the 3D model</p>
-                    <p>• Pinch to zoom in/out</p>
                     <p>• Tap "View in Your Space" below to place it on your table!</p>
+                    <p><em>Note: Size is locked to show actual dimensions</em></p>
                 </div>
             </model-viewer>
         </div>
@@ -205,8 +209,17 @@ function openARViewer(itemId, itemName, glbUrl) {
     
     title.textContent = itemName;
     
+    // Get the menu item to retrieve scale_factor
+    const menuItem = menuItems.find(item => item.id === itemId);
+    const scaleFactor = menuItem?.scale_factor || 1.0;
+    
+    console.log('Scale Factor:', scaleFactor);
+    
     // Set the GLB source
     viewer.setAttribute('src', glbUrl);
+    
+    // Set the scale to lock the model size
+    viewer.setAttribute('scale', `${scaleFactor} ${scaleFactor} ${scaleFactor}`);
     
     // Show modal
     modal.classList.add('active');
@@ -216,7 +229,7 @@ function openARViewer(itemId, itemName, glbUrl) {
     
     // Listen for model load events
     viewer.addEventListener('load', () => {
-        console.log('3D model loaded successfully');
+        console.log('3D model loaded successfully at scale:', scaleFactor);
     }, { once: true });
     
     viewer.addEventListener('error', (error) => {
