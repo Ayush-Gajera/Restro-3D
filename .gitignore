@@ -28,9 +28,7 @@ wheels/
 .env.local
 
 # Uploads
-uploads/
-*.glb
-*.gltf
+
 
 # IDE
 .vscode/
