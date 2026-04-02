@@ -313,6 +313,40 @@ model-viewer {
     font-size: 1.2rem;
 }
 
+/* Fallback AR Button — shown when native WebXR/ARCore is not available */
+.fallback-ar-btn {
+    position: absolute;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    padding: 0.9rem 2rem;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    box-shadow: 0 4px 20px rgba(245, 87, 108, 0.4);
+    transition: all 0.3s ease;
+    animation: fallbackBtnPulse 2s ease-in-out infinite;
+}
+
+.fallback-ar-btn:hover {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 6px 28px rgba(245, 87, 108, 0.55);
+}
+
+@keyframes fallbackBtnPulse {
+    0%, 100% { box-shadow: 0 4px 20px rgba(245, 87, 108, 0.4); }
+    50%      { box-shadow: 0 4px 28px rgba(245, 87, 108, 0.65); }
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
     .menu-container {

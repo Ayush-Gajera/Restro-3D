@@ -23,6 +23,8 @@ class Restaurant(Base):
     address = Column(Text)
     logo_url = Column(String(500))
     qr_code_url = Column(String(500))
+    marker_image_url = Column(String(500))   # Original marker image for AR tracking
+    marker_mind_url = Column(String(500))    # Compiled MindAR .mind target file
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

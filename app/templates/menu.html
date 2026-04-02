@@ -6,6 +6,9 @@
 <!-- Model Viewer - Google's 3D/AR component that works on all devices -->
 <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js"></script>
 <link rel="stylesheet" href="/static/css/menu.css">
+<link rel="stylesheet" href="/static/css/ar-fallback.css">
+<!-- AR Fallback engine (lazy-loads MindAR + Three.js only when needed) -->
+<script src="/static/js/ar-fallback.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -29,7 +32,7 @@
     </div>
 </div>
 
-<!-- AR Modal -->
+<!-- AR Modal (3D Preview + AR launch) -->
 <div id="ar-modal" class="ar-modal">
     <div class="ar-modal-content">
         <div class="ar-modal-header">
@@ -67,6 +70,11 @@
                     <p>• Tap "View in Your Space" below to place it on your table!</p>
                 </div>
             </model-viewer>
+
+            <!-- Fallback "Place on Table" button — shown when native AR is not available -->
+            <button id="fallback-ar-btn" class="fallback-ar-btn" style="display: none;" onclick="launchFallbackAR()">
+                <i class="fas fa-mobile-alt"></i> Place on Table (Camera)
+            </button>
         </div>
     </div>
 </div>
@@ -77,8 +85,63 @@
 const restaurantId = "{{ restaurant_id }}";
 let currentCategory = "";
 let menuItems = [];
+let currentGlbUrl = "";
+let currentScaleFactor = 1.0;
+let restaurantMarkerUrl = null; // Populated if restaurant has a compiled marker
 
-// Load restaurant info
+// ─── Capability Detection ────────────────────────────────────────
+// On modal open, detect if model-viewer can do AR. If not, show our fallback button.
+function checkARSupport() {
+    const viewer = document.getElementById('ar-viewer');
+    const fallbackBtn = document.getElementById('fallback-ar-btn');
+
+    // model-viewer sets canActivateAR after model loads
+    const check = () => {
+        if (viewer.canActivateAR) {
+            // Native AR works — hide fallback button
+            fallbackBtn.style.display = 'none';
+        } else {
+            // No native AR — show our fallback button
+            fallbackBtn.style.display = 'flex';
+        }
+    };
+
+    // Check immediately and also after a delay (model-viewer needs time)
+    check();
+    setTimeout(check, 500);
+    setTimeout(check, 1500);
+}
+
+// ─── Fallback AR Launch ──────────────────────────────────────────
+async function launchFallbackAR() {
+    // Close the model-viewer modal
+    closeARModal();
+
+    // Small delay for modal close animation
+    await new Promise(r => setTimeout(r, 200));
+
+    // Launch the fallback engine
+    const engine = new ARFallbackEngine({
+        glbUrl: currentGlbUrl,
+        markerMindUrl: restaurantMarkerUrl,
+        scaleFactor: currentScaleFactor,
+        markerTimeout: 5000,   // 5 seconds to find marker before center placement
+        lostTimeout: 3000,     // 3 seconds freeze when marker lost
+        onStateChange: (state) => {
+            // Update the data-state attribute on container for CSS hooks
+            const container = document.getElementById('arfb-container');
+            if (container) container.setAttribute('data-state', state);
+            console.log('[AR Fallback] State:', state);
+        },
+        onError: (err) => {
+            console.error('[AR Fallback] Error:', err.message);
+        }
+    });
+
+    engine.start();
+}
+
+// ─── Load restaurant info ────────────────────────────────────────
 async function loadRestaurant() {
     try {
         const response = await fetch(`/api/restaurants/${restaurantId}`);
@@ -86,6 +149,11 @@ async function loadRestaurant() {
         
         const restaurant = await response.json();
         
+        // Check if restaurant has a compiled AR marker
+        if (restaurant.marker_mind_url) {
+            restaurantMarkerUrl = restaurant.marker_mind_url;
+        }
+
         document.getElementById('restaurant-info').innerHTML = `
             ${restaurant.logo_url ? `<img src="${restaurant.logo_url}" alt="${restaurant.name}" class="restaurant-logo">` : ''}
             <h1>${restaurant.name}</h1>
@@ -103,7 +171,7 @@ async function loadRestaurant() {
     }
 }
 
-// Load menu items
+// ─── Load menu items ─────────────────────────────────────────────
 async function loadMenuItems() {
     try {
         const response = await fetch(`/api/restaurants/${restaurantId}/menu-items`);
@@ -162,7 +230,7 @@ function renderMenuItems() {
     }
     
     const html = filtered.map(item => `
-        <div class="menu-card" onclick="openARViewer('${item.id}', '${item.name}', '${item.glb_file_url}')">
+        <div class="menu-card" onclick="openARViewer('${item.id}', '${item.name}', '${item.glb_file_url}', ${item.scale_factor || 1.0})">
             ${item.image_url ? `<img src="${item.image_url}" alt="${item.name}" class="menu-card-image">` : ''}
             <div class="menu-card-content">
                 ${item.category ? `<span class="menu-card-category">${item.category}</span>` : ''}
@@ -171,7 +239,7 @@ function renderMenuItems() {
                     <div class="menu-card-price">$${item.price.toFixed(2)}</div>
                 </div>
                 ${item.description ? `<p class="menu-card-description">${item.description}</p>` : ''}
-                <button class="view-ar-btn" onclick="event.stopPropagation(); openARViewer('${item.id}', '${item.name}', '${item.glb_file_url}')">
+                <button class="view-ar-btn" onclick="event.stopPropagation(); openARViewer('${item.id}', '${item.name}', '${item.glb_file_url}', ${item.scale_factor || 1.0})">
                     <i class="fas fa-cube"></i> View in 3D/AR
                 </button>
             </div>
@@ -195,7 +263,7 @@ function filterByCategory(category) {
     renderMenuItems();
 }
 
-function openARViewer(itemId, itemName, glbUrl) {
+function openARViewer(itemId, itemName, glbUrl, scaleFactor) {
     const modal = document.getElementById('ar-modal');
     const viewer = document.getElementById('ar-viewer');
     const title = document.getElementById('ar-modal-title');
@@ -204,6 +272,8 @@ function openARViewer(itemId, itemName, glbUrl) {
     console.log('GLB URL:', glbUrl);
     
     title.textContent = itemName;
+    currentGlbUrl = glbUrl;
+    currentScaleFactor = scaleFactor || 1.0;
     
     // Set the GLB source
     viewer.setAttribute('src', glbUrl);
@@ -214,15 +284,19 @@ function openARViewer(itemId, itemName, glbUrl) {
     // Prevent body scroll
     document.body.style.overflow = 'hidden';
     
-    // Listen for model load events
+    // Check AR support after model loads
     viewer.addEventListener('load', () => {
         console.log('3D model loaded successfully');
+        checkARSupport();
     }, { once: true });
     
     viewer.addEventListener('error', (error) => {
         console.error('Error loading 3D model:', error);
         alert('Error loading 3D model. Please check if the GLB file is valid.');
     }, { once: true });
+
+    // Also check AR support with a delay (in case load event already fired)
+    setTimeout(checkARSupport, 300);
 }
 
 function closeARModal() {
@@ -231,7 +305,7 @@ function closeARModal() {
     document.body.style.overflow = '';
 }
 
-// Initialize
+// ─── Initialize ──────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     loadRestaurant();
     loadMenuItems();

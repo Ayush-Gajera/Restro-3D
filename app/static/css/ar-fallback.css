@@ -1,0 +1,243 @@
+/* ─── AR Fallback Overlay ─────────────────────────────────────── */
+
+#arfb-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 100000;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    animation: arfb-fadeIn 0.3s ease-out;
+}
+
+@keyframes arfb-fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* ─── Header / Close Button ──────────────────────────────────── */
+
+.arfb-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    display: flex;
+    justify-content: flex-end;
+    padding: 1rem;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%);
+    pointer-events: none;
+}
+
+.arfb-close {
+    pointer-events: auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #fff;
+    font-size: 1.3rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.25s, transform 0.25s;
+}
+
+.arfb-close:hover,
+.arfb-close:active {
+    background: rgba(255,255,255,0.35);
+    transform: rotate(90deg);
+}
+
+/* ─── Canvas Wrapper (camera + Three.js) ─────────────────────── */
+
+.arfb-canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+.arfb-canvas-wrap video,
+.arfb-canvas-wrap canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.arfb-video {
+    object-fit: cover;
+    z-index: 0;
+}
+
+.arfb-three-canvas {
+    z-index: 1;
+    pointer-events: auto;
+}
+
+/* ─── Status Bar ─────────────────────────────────────────────── */
+
+.arfb-status {
+    position: absolute;
+    bottom: 2.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 50px;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #fff;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 500;
+    white-space: nowrap;
+    max-width: 90vw;
+    transition: background 0.4s, transform 0.3s;
+    animation: arfb-slideUp 0.4s ease-out;
+}
+
+@keyframes arfb-slideUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.arfb-status i {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.arfb-status--scanning {
+    background: rgba(102, 126, 234, 0.75);
+}
+
+.arfb-status--success {
+    background: rgba(39, 174, 96, 0.8);
+}
+
+.arfb-status--warning {
+    background: rgba(243, 156, 18, 0.8);
+}
+
+.arfb-status--fallback {
+    background: rgba(102, 126, 234, 0.7);
+}
+
+.arfb-status--error {
+    background: rgba(231, 76, 60, 0.85);
+}
+
+/* ─── Scanning Frame Corners (pulsing animation) ─────────────── */
+
+.arfb-scan-frame {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 220px;
+    height: 220px;
+    z-index: 10;
+    pointer-events: none;
+    animation: arfb-pulse 2s ease-in-out infinite;
+    transition: opacity 0.4s;
+}
+
+/* Hide scanning frame when not scanning */
+#arfb-container:not([data-state="scanning"]) .arfb-scan-frame {
+    opacity: 0;
+}
+
+@keyframes arfb-pulse {
+    0%, 100% { opacity: 0.7; transform: translate(-50%, -50%) scale(1); }
+    50%      { opacity: 1;   transform: translate(-50%, -50%) scale(1.05); }
+}
+
+.arfb-corner {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border-color: #fff;
+    border-style: solid;
+    border-width: 0;
+}
+
+.arfb-corner--tl {
+    top: 0; left: 0;
+    border-top-width: 3px;
+    border-left-width: 3px;
+    border-top-left-radius: 8px;
+}
+
+.arfb-corner--tr {
+    top: 0; right: 0;
+    border-top-width: 3px;
+    border-right-width: 3px;
+    border-top-right-radius: 8px;
+}
+
+.arfb-corner--bl {
+    bottom: 0; left: 0;
+    border-bottom-width: 3px;
+    border-left-width: 3px;
+    border-bottom-left-radius: 8px;
+}
+
+.arfb-corner--br {
+    bottom: 0; right: 0;
+    border-bottom-width: 3px;
+    border-right-width: 3px;
+    border-bottom-right-radius: 8px;
+}
+
+/* ─── Low Light Warning ──────────────────────────────────────── */
+
+.arfb-low-light {
+    position: absolute;
+    top: 5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    padding: 0.6rem 1.2rem;
+    border-radius: 30px;
+    background: rgba(243, 156, 18, 0.85);
+    color: #fff;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    pointer-events: none;
+    animation: arfb-fadeIn 0.3s ease-out;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+    .arfb-status {
+        font-size: 0.85rem;
+        padding: 0.6rem 1.1rem;
+        bottom: 1.8rem;
+    }
+
+    .arfb-scan-frame {
+        width: 180px;
+        height: 180px;
+    }
+}
+
+@media (orientation: landscape) {
+    .arfb-status {
+        bottom: 1.5rem;
+    }
+}

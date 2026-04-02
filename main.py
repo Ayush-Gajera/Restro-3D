@@ -16,6 +16,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 (UPLOAD_DIR / "glb").mkdir(exist_ok=True)
 (UPLOAD_DIR / "images").mkdir(exist_ok=True)
 (UPLOAD_DIR / "qr_codes").mkdir(exist_ok=True)
+(UPLOAD_DIR / "markers").mkdir(exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,13 +36,14 @@ app = FastAPI(
 )
 
 # CORS Configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.get_allowed_origins_list(),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],
+#     #allow_origins=settings.get_allowed_origins_list(),
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

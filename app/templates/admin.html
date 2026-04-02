@@ -20,6 +20,9 @@
         <button class="tab" onclick="switchTab('menu')">
             <i class="fas fa-utensils"></i> Menu Items
         </button>
+        <button class="tab" onclick="switchTab('markers')">
+            <i class="fas fa-crosshairs"></i> AR Markers
+        </button>
     </div>
     
     <!-- Restaurants Tab -->
@@ -142,6 +145,85 @@
             <div id="menu-list" class="menu-list">
                 <div class="loading">
                     <i class="fas fa-spinner fa-spin"></i> Loading menu items...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AR Markers Tab -->
+    <div id="markers-tab" class="tab-content">
+        <div class="card">
+            <h2><i class="fas fa-crosshairs"></i> AR Marker Setup</h2>
+            <p style="color: #6c757d; margin-bottom: 1.5rem;">
+                Set up image-based AR tracking for a restaurant. Customers point their camera at the
+                printed marker image to see 3D food models placed on it.
+            </p>
+
+            <!-- Step 1: Compile -->
+            <div style="background: linear-gradient(135deg, rgba(102,126,234,0.08), rgba(118,75,162,0.08)); border: 1px solid rgba(102,126,234,0.2); border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem;">
+                <h3 style="margin-bottom: 0.5rem; color: #667eea;">
+                    <span style="background: #667eea; color: white; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.9rem; margin-right: 0.5rem;">1</span>
+                    Compile Your Marker Image
+                </h3>
+                <p style="color: #6c757d; font-size: 0.95rem; margin-bottom: 1rem;">
+                    Use MindAR's free online compiler to convert your marker image into a <code>.mind</code> file.
+                    Use a <strong>high-contrast, feature-rich image</strong> (logo, branded card, etc.).
+                </p>
+                <a href="https://hiukim.github.io/mind-ar-js-doc/tools/compile" target="_blank" class="btn btn-primary" style="display: inline-flex;">
+                    <i class="fas fa-external-link-alt"></i> Open MindAR Compiler
+                </a>
+                <p style="color: #999; font-size: 0.85rem; margin-top: 0.75rem;">
+                    <i class="fas fa-info-circle"></i> Drop your image, click Start, then Download the <code>targets.mind</code> file.
+                </p>
+            </div>
+
+            <!-- Step 2: Upload both files -->
+            <div style="background: linear-gradient(135deg, rgba(67,233,123,0.06), rgba(56,249,215,0.06)); border: 1px solid rgba(67,233,123,0.2); border-radius: 16px; padding: 1.5rem;">
+                <h3 style="margin-bottom: 0.5rem; color: #27ae60;">
+                    <span style="background: #27ae60; color: white; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.9rem; margin-right: 0.5rem;">2</span>
+                    Upload Both Files
+                </h3>
+
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="marker-restaurant">Select Restaurant *</label>
+                    <select id="marker-restaurant" required>
+                        <option value="">-- Select Restaurant --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Original Marker Image (JPG/PNG) *</label>
+                    <div class="file-upload" onclick="document.getElementById('marker-image-input').click()">
+                        <i class="fas fa-image"></i>
+                        <p id="marker-image-label">Click to upload marker image</p>
+                        <input type="file" id="marker-image-input" accept="image/jpeg,image/png" style="display:none;">
+                    </div>
+                </div>
+
+                <div id="marker-preview" style="display:none; text-align:center; margin: 1rem 0;">
+                    <img id="marker-preview-img" style="max-width: 200px; border-radius: 12px; border: 2px solid #667eea;">
+                </div>
+
+                <div class="form-group">
+                    <label>Compiled .mind File (from Step 1) *</label>
+                    <div class="file-upload" onclick="document.getElementById('marker-mind-input').click()">
+                        <i class="fas fa-file-code"></i>
+                        <p id="marker-mind-label">Click to upload targets.mind file</p>
+                        <input type="file" id="marker-mind-input" accept=".mind" style="display:none;">
+                    </div>
+                </div>
+
+                <button id="upload-marker-btn" class="btn btn-primary" onclick="uploadMarkerFiles()" style="display:none; margin-top: 0.5rem;">
+                    <i class="fas fa-upload"></i> Upload Marker
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Restaurant Markers</h2>
+            <div id="marker-list">
+                <div class="loading">
+                    <i class="fas fa-spinner fa-spin"></i> Loading markers...
                 </div>
             </div>
         </div>

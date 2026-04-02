@@ -1,6 +1,7 @@
 // Global variables
 let restaurants = [];
 let currentRestaurantId = null;
+let selectedMarkerFile = null;  // For marker upload
 
 // Tab switching
 function switchTab(tabName) {
@@ -19,6 +20,9 @@ function switchTab(tabName) {
     // Load data if needed
     if (tabName === 'menu') {
         loadRestaurantsForDropdown();
+    } else if (tabName === 'markers') {
+        loadRestaurantsForMarkerDropdown();
+        loadMarkerList();
     }
 }
 
@@ -70,6 +74,7 @@ async function loadRestaurants() {
                     <p>${restaurant.description || 'No description'}</p>
                     <p style="font-size: 0.85rem; color: #999;">
                         <i class="fas fa-calendar"></i> Created: ${new Date(restaurant.created_at).toLocaleDateString()}
+                        ${restaurant.marker_mind_url ? ' | <i class="fas fa-crosshairs" style="color: #27ae60;"></i> AR Marker active' : ''}
                     </p>
                 </div>
                 <div class="item-actions">
@@ -325,6 +330,150 @@ async function deleteMenuItem(itemId) {
     }
 }
 
+// ─── AR Marker Management ────────────────────────────────────────
+// No in-browser compilation — user compiles via MindAR's online tool
+// (https://hiukim.github.io/mind-ar-js-doc/tools/compile) then uploads here.
+
+async function loadRestaurantsForMarkerDropdown() {
+    try {
+        const response = await fetch('/api/restaurants');
+        if (!response.ok) throw new Error('Failed to load');
+        const data = await response.json();
+        const select = document.getElementById('marker-restaurant');
+        const currentVal = select.value;
+        select.innerHTML = '<option value="">-- Select Restaurant --</option>' +
+            data.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+        if (currentVal) select.value = currentVal;
+    } catch (err) {
+        console.error('Error loading restaurants for marker dropdown:', err);
+    }
+}
+
+// Show preview when marker image is selected
+document.getElementById('marker-image-input').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    selectedMarkerFile = file;
+    document.getElementById('marker-image-label').textContent = file.name;
+
+    // Show image preview
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        document.getElementById('marker-preview-img').src = ev.target.result;
+        document.getElementById('marker-preview').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+
+    checkMarkerUploadReady();
+});
+
+// Show filename when .mind file is selected
+document.getElementById('marker-mind-input').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    document.getElementById('marker-mind-label').textContent = file.name;
+    checkMarkerUploadReady();
+});
+
+// Show upload button only when both files are selected
+function checkMarkerUploadReady() {
+    const hasImage = document.getElementById('marker-image-input').files.length > 0;
+    const hasMind  = document.getElementById('marker-mind-input').files.length > 0;
+    document.getElementById('upload-marker-btn').style.display = (hasImage && hasMind) ? 'inline-flex' : 'none';
+}
+
+async function uploadMarkerFiles() {
+    const restaurantId = document.getElementById('marker-restaurant').value;
+    if (!restaurantId) { alert('Please select a restaurant.'); return; }
+
+    const imageFile = document.getElementById('marker-image-input').files[0];
+    const mindFile  = document.getElementById('marker-mind-input').files[0];
+    if (!imageFile || !mindFile) { alert('Please select both the marker image and .mind file.'); return; }
+
+    const btn = document.getElementById('upload-marker-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+
+    try {
+        const formData = new FormData();
+        formData.append('marker_image', imageFile);
+        formData.append('marker_mind', mindFile);
+
+        const response = await fetch(`/api/restaurants/${restaurantId}/upload-marker`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.detail || 'Upload failed');
+        }
+
+        alert('AR Marker uploaded successfully! Customers can now use marker-based AR for this restaurant.');
+
+        // Reset the form
+        document.getElementById('marker-image-input').value = '';
+        document.getElementById('marker-mind-input').value = '';
+        document.getElementById('marker-image-label').textContent = 'Click to upload marker image';
+        document.getElementById('marker-mind-label').textContent = 'Click to upload targets.mind file';
+        document.getElementById('marker-preview').style.display = 'none';
+        btn.style.display = 'none';
+
+        // Refresh lists
+        loadMarkerList();
+        loadRestaurants();
+
+    } catch (err) {
+        console.error('Marker upload error:', err);
+        alert('Error: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Upload Marker';
+    }
+}
+
+async function loadMarkerList() {
+    try {
+        const response = await fetch('/api/restaurants');
+        if (!response.ok) throw new Error('Failed to load');
+        const data = await response.json();
+
+        const withMarkers = data.filter(r => r.marker_mind_url);
+
+        if (withMarkers.length === 0) {
+            document.getElementById('marker-list').innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-crosshairs"></i>
+                    <p>No markers configured yet. Upload one above!</p>
+                </div>
+            `;
+            return;
+        }
+
+        document.getElementById('marker-list').innerHTML = withMarkers.map(r => `
+            <div class="restaurant-item">
+                <div class="item-info" style="display:flex; align-items:center; gap:1rem;">
+                    ${r.marker_image_url ? `<img src="${r.marker_image_url}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:2px solid #667eea;">` : ''}
+                    <div>
+                        <h3>${r.name}</h3>
+                        <p style="font-size:0.85rem; color:#27ae60;">
+                            <i class="fas fa-check-circle"></i> AR Marker active
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        document.getElementById('marker-list').innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-circle"></i>
+                <p>Error loading markers</p>
+            </div>
+        `;
+    }
+}
+
 // File upload indicators
 document.getElementById('restaurant-logo').addEventListener('change', function(e) {
     const fileName = e.target.files[0]?.name || 'No file selected';
@@ -345,3 +494,4 @@ document.getElementById('menu-image').addEventListener('change', function(e) {
 document.addEventListener('DOMContentLoaded', () => {
     loadRestaurants();
 });
+
