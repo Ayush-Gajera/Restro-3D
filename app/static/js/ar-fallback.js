@@ -34,10 +34,12 @@ const STATES = {
 };
 
 // ─── CDN URLs (loaded lazily, only when fallback triggers) ───────
+// Three.js r147 is the last stable version that ships global `examples/js/` loaders.
+// r150+ removed examples/js/ entirely, leaving only ES-module paths.
 const CDN = {
     MINDAR: 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js',
-    THREE:  'https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js',
-    GLTF:   'https://cdn.jsdelivr.net/npm/three@0.153.0/examples/js/loaders/GLTFLoader.js',
+    THREE:  'https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js',
+    GLTF:   'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -53,9 +55,17 @@ function loadScript(src) {
 }
 
 async function loadDependencies() {
-    // Three.js must load first (sets window.THREE), then GLTFLoader attaches to it
-    await loadScript(CDN.THREE);
-    await loadScript(CDN.GLTF);
+    // model-viewer may have already loaded its own Three.js — but it's
+    // module-scoped and doesn't set window.THREE. We always load our own
+    // global build so GLTFLoader can attach to it.
+    if (!window.THREE) {
+        await loadScript(CDN.THREE);
+    }
+    // GLTFLoader attaches to the global THREE object
+    if (!window.THREE.GLTFLoader) {
+        await loadScript(CDN.GLTF);
+    }
+    // MindAR (only needed if marker mode is used, but safe to load always)
     await loadScript(CDN.MINDAR);
 }
 
@@ -269,7 +279,12 @@ class ARFallbackEngine {
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setSize(w, h);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        // r147 uses outputEncoding; r152+ renamed it to outputColorSpace
+        if (this.renderer.outputColorSpace !== undefined) {
+            this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        } else {
+            this.renderer.outputEncoding = THREE.sRGBEncoding;
+        }
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 1.0;
         this.renderer.domElement.className = 'arfb-three-canvas';
