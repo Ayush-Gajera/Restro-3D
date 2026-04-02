@@ -3,7 +3,7 @@
 {% block title %}Menu - Restro3D{% endblock %}
 
 {% block extra_head %}
-<!-- Model Viewer - Google's 3D/AR component that works on all devices -->
+<!-- Model Viewer - Google's 3D/AR component (handles WebXR, Scene Viewer, Quick Look) -->
 <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js"></script>
 <link rel="stylesheet" href="/static/css/menu.css">
 <link rel="stylesheet" href="/static/css/ar-fallback.css">
@@ -16,8 +16,75 @@
     }
 }
 </script>
-<!-- AR Fallback engine (ES module — MindAR loaded dynamically only when needed) -->
+<!-- AR Fallback engine (ES module — only activates on non-AR devices) -->
 <script type="module" src="/static/js/ar-fallback.js"></script>
+
+<style>
+    /* ─── model-viewer fills its container ─── */
+    model-viewer {
+        width: 100%;
+        height: 100%;
+        --poster-color: transparent;
+    }
+
+    /* ─── Native AR button (styled, replaces default) ─── */
+    .ar-launch-btn {
+        position: absolute;
+        bottom: 1.2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        padding: 0.85rem 2rem;
+        border: none;
+        border-radius: 50px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-family: 'Poppins', sans-serif;
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        box-shadow: 0 4px 20px rgba(102, 126, 234, 0.45);
+        transition: all 0.3s ease;
+    }
+    .ar-launch-btn:active {
+        transform: translateX(-50%) scale(0.96);
+    }
+
+    /* ─── AR status prompt (shown inside model-viewer during AR) ─── */
+    .ar-prompt {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        color: white;
+        background: rgba(0,0,0,0.65);
+        backdrop-filter: blur(10px);
+        padding: 2rem;
+        border-radius: 20px;
+        max-width: 85%;
+        pointer-events: none;
+        font-family: 'Poppins', sans-serif;
+        transition: opacity 0.4s;
+    }
+    .ar-prompt h3 {
+        font-size: 1.1rem;
+        margin-bottom: 0.8rem;
+    }
+    .ar-prompt p {
+        font-size: 0.95rem;
+        margin: 0.4rem 0;
+        opacity: 0.9;
+    }
+
+    /* Hide prompt when AR is active (model-viewer adds ar-status attribute) */
+    model-viewer[ar-status="session-started"] .ar-prompt {
+        opacity: 0;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -41,7 +108,15 @@
     </div>
 </div>
 
-<!-- AR Modal (3D Preview + AR launch) -->
+<!-- ──────────────────────────────────────────────────────────────
+     AR MODAL — 3D Preview + AR Launch
+     
+     model-viewer handles all native AR automatically:
+     • Android Chrome (ARCore)  → WebXR immersive-ar session
+     • Android (no ARCore)      → Scene Viewer intent (Google app)
+     • iOS Safari               → AR Quick Look (auto-converts GLB to USDZ)
+     • No AR support            → We show our custom fallback button
+────────────────────────────────────────────────────────────────── -->
 <div id="ar-modal" class="ar-modal">
     <div class="ar-modal-content">
         <div class="ar-modal-header">
@@ -56,31 +131,38 @@
                 src=""
                 ar
                 ar-modes="webxr scene-viewer quick-look"
+                ar-scale="auto"
+                ar-placement="floor"
                 camera-controls
                 touch-action="pan-y"
                 auto-rotate
-                shadow-intensity="1"
+                rotation-per-second="30deg"
+                shadow-intensity="1.2"
+                shadow-softness="0.8"
                 environment-image="neutral"
                 exposure="1"
                 alt="Food Item 3D Model"
                 loading="eager"
                 reveal="auto"
+                interaction-prompt="auto"
+                xr-environment
             >
-                <div class="ar-instructions" slot="progress-bar" style="display: none;">
-                    <p><strong>💡 Loading 3D model...</strong></p>
-                </div>
-                <button slot="ar-button" class="view-ar-btn" style="position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 10;">
-                    <i class="fas fa-camera"></i> View in Your Space
+                <!-- Custom AR Button (replaces default, styled) -->
+                <button slot="ar-button" class="ar-launch-btn" id="native-ar-btn">
+                    <i class="fas fa-cube"></i>
+                    <span id="ar-btn-text">View in Your Space</span>
                 </button>
-                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: white; background: rgba(0,0,0,0.7); padding: 2rem; border-radius: 12px; max-width: 80%;">
-                    <p><strong>💡 How to use:</strong></p>
-                    <p>• Drag to rotate the 3D model</p>
-                    <p>• Pinch to zoom in/out</p>
-                    <p>• Tap "View in Your Space" below to place it on your table!</p>
+
+                <!-- Usage instructions overlay -->
+                <div class="ar-prompt" id="ar-prompt">
+                    <h3>💡 3D Preview</h3>
+                    <p>👆 Drag to rotate</p>
+                    <p>🤏 Pinch to zoom</p>
+                    <p>⬇️ Tap the button below to place on your table!</p>
                 </div>
             </model-viewer>
 
-            <!-- Fallback "Place on Table" button — shown when native AR is not available -->
+            <!-- Fallback "Place on Table" button — shown ONLY when no native AR is available -->
             <button id="fallback-ar-btn" class="fallback-ar-btn" style="display: none;" onclick="launchFallbackAR()">
                 <i class="fas fa-mobile-alt"></i> Place on Table (Camera)
             </button>
@@ -96,48 +178,69 @@ let currentCategory = "";
 let menuItems = [];
 let currentGlbUrl = "";
 let currentScaleFactor = 1.0;
-let restaurantMarkerUrl = null; // Populated if restaurant has a compiled marker
+let restaurantMarkerUrl = null;
 
-// ─── Capability Detection ────────────────────────────────────────
-// On modal open, detect if model-viewer can do AR. If not, show our fallback button.
-function checkARSupport() {
+// ─── AR Support Detection ────────────────────────────────────────
+// model-viewer handles AR capability internally. We just need to check
+// canActivateAR to decide whether to show our fallback button.
+
+function setupARDetection() {
     const viewer = document.getElementById('ar-viewer');
     const fallbackBtn = document.getElementById('fallback-ar-btn');
+    const nativeBtn = document.getElementById('native-ar-btn');
+    const arBtnText = document.getElementById('ar-btn-text');
+    const prompt = document.getElementById('ar-prompt');
 
-    // model-viewer sets canActivateAR after model loads
     const check = () => {
         if (viewer.canActivateAR) {
-            // Native AR works — hide fallback button
+            // Native AR is supported — show native button, hide fallback
+            nativeBtn.style.display = 'flex';
             fallbackBtn.style.display = 'none';
+
+            // Detect platform for better button text
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            if (isIOS) {
+                arBtnText.textContent = 'View in AR (Quick Look)';
+            } else {
+                arBtnText.textContent = 'Place on Your Table';
+            }
         } else {
-            // No native AR — show our fallback button
+            // No native AR — hide native button, show fallback
+            nativeBtn.style.display = 'none';
             fallbackBtn.style.display = 'flex';
         }
     };
 
-    // Check immediately and also after a delay (model-viewer needs time)
+    // Check multiple times (model-viewer needs time to determine AR support)
     check();
-    setTimeout(check, 500);
-    setTimeout(check, 1500);
+    setTimeout(check, 300);
+    setTimeout(check, 800);
+    setTimeout(check, 2000);
+
+    // Also listen for ar-status changes (model-viewer updates this attribute)
+    viewer.addEventListener('ar-status', (e) => {
+        console.log('[AR] Status:', e.detail.status);
+    });
 }
 
-// ─── Fallback AR Launch ──────────────────────────────────────────
+// ─── Fallback AR Launch (non-AR devices) ─────────────────────────
 async function launchFallbackAR() {
-    // Close the model-viewer modal
     closeARModal();
-
-    // Small delay for modal close animation
     await new Promise(r => setTimeout(r, 200));
 
-    // Launch the fallback engine
+    // ARFallbackEngine is set on window by the ES module
+    if (typeof window.ARFallbackEngine === 'undefined') {
+        alert('AR engine is still loading. Please try again in a moment.');
+        return;
+    }
+
     const engine = new ARFallbackEngine({
         glbUrl: currentGlbUrl,
         markerMindUrl: restaurantMarkerUrl,
         scaleFactor: currentScaleFactor,
-        markerTimeout: 5000,   // 5 seconds to find marker before center placement
-        lostTimeout: 3000,     // 3 seconds freeze when marker lost
+        markerTimeout: 5000,
+        lostTimeout: 3000,
         onStateChange: (state) => {
-            // Update the data-state attribute on container for CSS hooks
             const container = document.getElementById('arfb-container');
             if (container) container.setAttribute('data-state', state);
             console.log('[AR Fallback] State:', state);
@@ -150,7 +253,7 @@ async function launchFallbackAR() {
     engine.start();
 }
 
-// ─── Load restaurant info ────────────────────────────────────────
+// ─── Load Restaurant ─────────────────────────────────────────────
 async function loadRestaurant() {
     try {
         const response = await fetch(`/api/restaurants/${restaurantId}`);
@@ -158,7 +261,6 @@ async function loadRestaurant() {
         
         const restaurant = await response.json();
         
-        // Check if restaurant has a compiled AR marker
         if (restaurant.marker_mind_url) {
             restaurantMarkerUrl = restaurant.marker_mind_url;
         }
@@ -180,7 +282,7 @@ async function loadRestaurant() {
     }
 }
 
-// ─── Load menu items ─────────────────────────────────────────────
+// ─── Load Menu Items ─────────────────────────────────────────────
 async function loadMenuItems() {
     try {
         const response = await fetch(`/api/restaurants/${restaurantId}/menu-items`);
@@ -198,7 +300,6 @@ async function loadMenuItems() {
             return;
         }
         
-        // Get unique categories
         const categories = [...new Set(menuItems.map(item => item.category).filter(Boolean))];
         
         if (categories.length > 0) {
@@ -260,52 +361,51 @@ function renderMenuItems() {
 
 function filterByCategory(category) {
     currentCategory = category;
-    
-    // Update active button
     document.querySelectorAll('.category-btn').forEach(btn => {
         btn.classList.remove('active');
-        if (btn.dataset.category === category) {
-            btn.classList.add('active');
-        }
+        if (btn.dataset.category === category) btn.classList.add('active');
     });
-    
     renderMenuItems();
 }
 
+// ─── Open AR Viewer Modal ────────────────────────────────────────
 function openARViewer(itemId, itemName, glbUrl, scaleFactor) {
     const modal = document.getElementById('ar-modal');
     const viewer = document.getElementById('ar-viewer');
     const title = document.getElementById('ar-modal-title');
-    
-    console.log('Opening AR viewer for:', itemName);
-    console.log('GLB URL:', glbUrl);
+    const prompt = document.getElementById('ar-prompt');
     
     title.textContent = itemName;
     currentGlbUrl = glbUrl;
     currentScaleFactor = scaleFactor || 1.0;
     
-    // Set the GLB source
+    // Set the GLB source (model-viewer handles GLB → USDZ auto-conversion for iOS)
     viewer.setAttribute('src', glbUrl);
+    
+    // Show prompt
+    if (prompt) prompt.style.opacity = '1';
     
     // Show modal
     modal.classList.add('active');
-    
-    // Prevent body scroll
     document.body.style.overflow = 'hidden';
     
-    // Check AR support after model loads
+    // Detect AR support once model loads
     viewer.addEventListener('load', () => {
-        console.log('3D model loaded successfully');
-        checkARSupport();
+        console.log('3D model loaded:', itemName);
+        setupARDetection();
+        
+        // Hide prompt after 6 seconds
+        setTimeout(() => {
+            if (prompt) prompt.style.opacity = '0';
+        }, 6000);
     }, { once: true });
     
     viewer.addEventListener('error', (error) => {
         console.error('Error loading 3D model:', error);
-        alert('Error loading 3D model. Please check if the GLB file is valid.');
     }, { once: true });
 
-    // Also check AR support with a delay (in case load event already fired)
-    setTimeout(checkARSupport, 300);
+    // Also run detection with delay (in case load already fired)
+    setTimeout(setupARDetection, 500);
 }
 
 function closeARModal() {
@@ -320,11 +420,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadMenuItems();
 });
 
-// Close modal on escape key
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        closeARModal();
-    }
+    if (e.key === 'Escape') closeARModal();
 });
 </script>
 {% endblock %}
