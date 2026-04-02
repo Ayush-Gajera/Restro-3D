@@ -7,8 +7,17 @@
 <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js"></script>
 <link rel="stylesheet" href="/static/css/menu.css">
 <link rel="stylesheet" href="/static/css/ar-fallback.css">
-<!-- AR Fallback engine (lazy-loads MindAR + Three.js only when needed) -->
-<script src="/static/js/ar-fallback.js"></script>
+<!-- Import map — single Three.js instance shared between ar-fallback.js and MindAR -->
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/"
+    }
+}
+</script>
+<!-- AR Fallback engine (ES module — MindAR loaded dynamically only when needed) -->
+<script type="module" src="/static/js/ar-fallback.js"></script>
 {% endblock %}
 
 {% block content %}

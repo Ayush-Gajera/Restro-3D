@@ -1,27 +1,18 @@
 /**
- * AR Fallback Engine for Restro3D
+ * AR Fallback Engine for Restro3D (ES Module)
  *
  * Provides AR-like experience on devices without WebXR/ARCore support.
  *
- * WHY MindAR.js (not AR.js):
- * - Image-target based: tracks ANY image, not just ugly fiducial markers
- * - WASM-powered: fast client-side detection, no server needed
- * - Three.js native integration via mindar-image-three module
- * - Better pose estimation, handles partial occlusion
+ * Three.js + GLTFLoader are loaded via import map (set in menu.html).
+ * MindAR is dynamically imported only when marker mode is needed.
  *
- * MARKER DETECTION FLOW:
- * 1. MindAR loads the compiled .mind target file
- * 2. Camera feed is analyzed frame-by-frame via WASM worker
- * 3. Feature points are extracted and matched against the target
- * 4. When matched, a 6DOF pose (position + rotation) is estimated
- * 5. The pose is applied to a Three.js anchor group each frame
- * 6. 3D model attached to anchor follows the marker in real-time
- *
- * POSE ESTIMATION:
- * MindAR uses homography estimation + PnP (Perspective-n-Point) solving
- * to compute the 3D pose from 2D feature correspondences. The .mind file
- * contains pre-computed feature descriptors for the target image.
+ * FLOW:
+ * 1. If marker .mind URL exists → try MindAR marker tracking
+ * 2. If no marker or timeout → center-placement mode (3D over camera)
  */
+
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ─── State Machine ───────────────────────────────────────────────
 const STATES = {
@@ -33,42 +24,6 @@ const STATES = {
     ERROR:        'error'
 };
 
-// ─── CDN URLs (loaded lazily, only when fallback triggers) ───────
-// Three.js r147 is the last stable version that ships global `examples/js/` loaders.
-// r150+ removed examples/js/ entirely, leaving only ES-module paths.
-const CDN = {
-    MINDAR: 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js',
-    THREE:  'https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js',
-    GLTF:   'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js',
-};
-
-// ─── Helpers ─────────────────────────────────────────────────────
-function loadScript(src) {
-    return new Promise((resolve, reject) => {
-        if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-        const s = document.createElement('script');
-        s.src = src;
-        s.onload = resolve;
-        s.onerror = () => reject(new Error(`Failed to load: ${src}`));
-        document.head.appendChild(s);
-    });
-}
-
-async function loadDependencies() {
-    // model-viewer may have already loaded its own Three.js — but it's
-    // module-scoped and doesn't set window.THREE. We always load our own
-    // global build so GLTFLoader can attach to it.
-    if (!window.THREE) {
-        await loadScript(CDN.THREE);
-    }
-    // GLTFLoader attaches to the global THREE object
-    if (!window.THREE.GLTFLoader) {
-        await loadScript(CDN.GLTF);
-    }
-    // MindAR (only needed if marker mode is used, but safe to load always)
-    await loadScript(CDN.MINDAR);
-}
-
 // ─── Main Engine Class ──────────────────────────────────────────
 class ARFallbackEngine {
 
@@ -76,8 +31,8 @@ class ARFallbackEngine {
         this.glbUrl          = config.glbUrl;
         this.markerMindUrl   = config.markerMindUrl || null;
         this.scaleFactor     = config.scaleFactor || 1.0;
-        this.markerTimeout   = config.markerTimeout || 5000;   // ms before switching to center placement
-        this.lostTimeout     = config.lostTimeout || 3000;     // ms to freeze before hiding
+        this.markerTimeout   = config.markerTimeout || 5000;
+        this.lostTimeout     = config.lostTimeout || 3000;
         this.onStateChange   = config.onStateChange || (() => {});
         this.onError         = config.onError || (() => {});
 
@@ -116,7 +71,6 @@ class ARFallbackEngine {
         try {
             this._buildContainer();
             this._setState(STATES.INITIALIZING);
-            await loadDependencies();
 
             if (this.markerMindUrl) {
                 await this._startMarkerMode();
@@ -131,30 +85,24 @@ class ARFallbackEngine {
     }
 
     stop() {
-        // Stop MindAR
         if (this.mindarThree) {
             try { this.mindarThree.stop(); } catch (_) {}
             this.mindarThree = null;
         }
-        // Stop camera stream
         if (this.stream) {
             this.stream.getTracks().forEach(t => t.stop());
             this.stream = null;
         }
-        // Cancel animation
         if (this.animationId) {
             cancelAnimationFrame(this.animationId);
             this.animationId = null;
         }
-        // Clear timers
         clearTimeout(this._markerTimer);
         clearTimeout(this._lostTimer);
-        // Dispose renderer
         if (this.renderer) {
             this.renderer.dispose();
             this.renderer = null;
         }
-        // Remove container
         if (this.container && this.container.parentNode) {
             this.container.parentNode.removeChild(this.container);
             this.container = null;
@@ -162,14 +110,27 @@ class ARFallbackEngine {
         document.body.style.overflow = '';
     }
 
-    // ─── Marker Mode (MindAR) ────────────────────────────────────
+    // ─── Marker Mode (MindAR — dynamically imported) ─────────────
 
     async _startMarkerMode() {
         this._setState(STATES.SCANNING);
-        const THREE = window.THREE;
 
-        // Create MindAR instance — it handles camera + Three.js scene
-        this.mindarThree = new window.MINDAR.IMAGE.MindARThree({
+        // Dynamically import MindAR (ES module, resolves 'three' via import map)
+        let MindARThree;
+        try {
+            const mindARModule = await import(
+                /* webpackIgnore: true */
+                'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js'
+            );
+            MindARThree = mindARModule.MindARThree;
+        } catch (err) {
+            console.warn('[ARFallback] MindAR failed to load, falling back to center placement:', err.message);
+            await this._startCenterPlacement();
+            return;
+        }
+
+        // Create MindAR instance
+        this.mindarThree = new MindARThree({
             container: this.container.querySelector('.arfb-canvas-wrap'),
             imageTargetSrc: this.markerMindUrl,
         });
@@ -179,9 +140,9 @@ class ARFallbackEngine {
         this.scene    = scene;
         this.camera   = camera;
 
-        this._setupLighting(THREE, scene);
+        this._setupLighting(scene);
 
-        // Load model
+        // Load 3D model
         this.model = await this._loadModel(this.glbUrl);
 
         // Create anchor for target index 0
@@ -189,7 +150,7 @@ class ARFallbackEngine {
         this.anchor.group.add(this.model);
 
         // Shadow under model
-        this.shadowPlane = this._createShadow(THREE);
+        this.shadowPlane = this._createShadow();
         this.anchor.group.add(this.shadowPlane);
 
         // Marker found/lost handlers
@@ -203,17 +164,16 @@ class ARFallbackEngine {
 
         this.anchor.onTargetLost = () => {
             this._setState(STATES.LOST);
-            // Freeze for lostTimeout, then hide
             this._lostTimer = setTimeout(() => {
                 this.model.visible = false;
                 this.shadowPlane.visible = false;
             }, this.lostTimeout);
         };
 
-        // Start MindAR (opens camera + begins tracking)
+        // Start MindAR
         await this.mindarThree.start();
 
-        // Marker timeout → switch to center placement
+        // Timeout → switch to center placement
         this._markerTimer = setTimeout(() => {
             if (this.state === STATES.SCANNING) {
                 this._transitionToCenterPlacement();
@@ -227,7 +187,6 @@ class ARFallbackEngine {
     }
 
     async _transitionToCenterPlacement() {
-        // Stop MindAR but keep container
         if (this.mindarThree) {
             this.mindarThree.stop();
             this.mindarThree = null;
@@ -237,10 +196,8 @@ class ARFallbackEngine {
             this.renderer.dispose();
             this.renderer = null;
         }
-        // Clear the canvas wrapper
         const wrap = this.container.querySelector('.arfb-canvas-wrap');
         wrap.innerHTML = '';
-        // Start center placement from scratch
         await this._startCenterPlacement();
     }
 
@@ -248,7 +205,6 @@ class ARFallbackEngine {
 
     async _startCenterPlacement() {
         this._setState(STATES.FALLBACK);
-        const THREE = window.THREE;
 
         const wrap = this.container.querySelector('.arfb-canvas-wrap');
 
@@ -272,19 +228,14 @@ class ARFallbackEngine {
         wrap.appendChild(this.videoEl);
         await this.videoEl.play();
 
-        // 2. Three.js renderer overlay (transparent bg so video shows through)
+        // 2. Three.js renderer overlay
         const w = wrap.clientWidth  || window.innerWidth;
         const h = wrap.clientHeight || window.innerHeight;
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setSize(w, h);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        // r147 uses outputEncoding; r152+ renamed it to outputColorSpace
-        if (this.renderer.outputColorSpace !== undefined) {
-            this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-        } else {
-            this.renderer.outputEncoding = THREE.sRGBEncoding;
-        }
+        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 1.0;
         this.renderer.domElement.className = 'arfb-three-canvas';
@@ -295,13 +246,12 @@ class ARFallbackEngine {
         this.camera = new THREE.PerspectiveCamera(60, w / h, 0.01, 100);
         this.camera.position.set(0, 0, 0);
 
-        this._setupLighting(THREE, this.scene);
+        this._setupLighting(this.scene);
 
-        // 4. Load model if not already loaded
+        // 4. Load model
         if (!this.model) {
             this.model = await this._loadModel(this.glbUrl);
         }
-        // Reset transforms
         this.model.position.set(0, -0.05, -0.6);
         this.model.rotation.set(this._touch.rotX, this._touch.rotY, 0);
         this.model.scale.setScalar(this._touch.scale);
@@ -309,7 +259,7 @@ class ARFallbackEngine {
         this.scene.add(this.model);
 
         // 5. Shadow
-        this.shadowPlane = this._createShadow(THREE);
+        this.shadowPlane = this._createShadow();
         this.shadowPlane.position.set(0, -0.22, -0.6);
         this.shadowPlane.visible = true;
         this.scene.add(this.shadowPlane);
@@ -327,7 +277,7 @@ class ARFallbackEngine {
         };
         window.addEventListener('resize', this._onResize);
 
-        // 8. Render loop (target 60 fps, throttle if needed)
+        // 8. Render loop
         const animate = () => {
             this.animationId = requestAnimationFrame(animate);
             if (this.model) {
@@ -342,14 +292,12 @@ class ARFallbackEngine {
     // ─── Model Loading ───────────────────────────────────────────
 
     async _loadModel(url) {
-        const THREE = window.THREE;
         return new Promise((resolve, reject) => {
-            const loader = new THREE.GLTFLoader();
+            const loader = new GLTFLoader();
             loader.load(
                 url,
                 (gltf) => {
                     const model = gltf.scene;
-                    // Auto-scale: fit model into a 0.3 unit bounding box
                     const box  = new THREE.Box3().setFromObject(model);
                     const size = new THREE.Vector3();
                     box.getSize(size);
@@ -357,21 +305,20 @@ class ARFallbackEngine {
                     const s = (0.3 / maxDim) * this.scaleFactor;
                     model.scale.setScalar(s);
                     this._touch.scale = s;
-                    // Center model
                     const center = new THREE.Vector3();
                     box.getCenter(center);
                     model.position.sub(center.multiplyScalar(s));
                     resolve(model);
                 },
                 undefined,
-                (err) => reject(new Error('Failed to load GLB: ' + err.message))
+                (err) => reject(new Error('Failed to load GLB: ' + (err?.message || err)))
             );
         });
     }
 
     // ─── Lighting ────────────────────────────────────────────────
 
-    _setupLighting(THREE, scene) {
+    _setupLighting(scene) {
         const ambient = new THREE.AmbientLight(0xffffff, 0.8);
         const dir     = new THREE.DirectionalLight(0xffffff, 0.9);
         dir.position.set(0.5, 1.0, 0.8);
@@ -380,7 +327,7 @@ class ARFallbackEngine {
 
     // ─── Shadow ──────────────────────────────────────────────────
 
-    _createShadow(THREE) {
+    _createShadow() {
         const geo = new THREE.CircleGeometry(0.15, 32);
         const mat = new THREE.MeshBasicMaterial({
             color: 0x000000,
@@ -396,7 +343,6 @@ class ARFallbackEngine {
     // ─── Touch Controls ──────────────────────────────────────────
 
     _setupTouchControls(canvas) {
-        // Single finger → drag to rotate
         canvas.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) {
                 this._touch.isDragging = true;
@@ -425,7 +371,7 @@ class ARFallbackEngine {
             e.preventDefault();
         }, { passive: false });
 
-        canvas.addEventListener('touchend', (e) => {
+        canvas.addEventListener('touchend', () => {
             this._touch.isDragging = false;
             this._touch.pinchDist  = null;
         });
@@ -464,7 +410,6 @@ class ARFallbackEngine {
         else if (err.name === 'NotReadableError')  msg = 'Camera is in use by another application.';
         this._setState(STATES.ERROR);
         this.onError(new Error(msg));
-        // Show error in UI
         const overlay = this.container.querySelector('.arfb-status');
         if (overlay) {
             overlay.className = 'arfb-status arfb-status--error';
@@ -488,7 +433,7 @@ class ARFallbackEngine {
             [STATES.INITIALIZING]: { icon: 'fa-spinner fa-spin', text: 'Loading AR experience...',              cls: '' },
             [STATES.SCANNING]:     { icon: 'fa-camera',          text: 'Point camera at the marker image',      cls: 'arfb-status--scanning' },
             [STATES.DETECTED]:     { icon: 'fa-check-circle',    text: 'Marker detected! Model placed.',        cls: 'arfb-status--success' },
-            [STATES.LOST]:         { icon: 'fa-eye-slash',       text: 'Marker lost — keep it in view',         cls: 'arfb-status--warning' },
+            [STATES.LOST]:         { icon: 'fa-eye-slash',       text: 'Marker lost \u2014 keep it in view',    cls: 'arfb-status--warning' },
             [STATES.FALLBACK]:     { icon: 'fa-hand-pointer',    text: 'Drag to rotate \u2022 Pinch to zoom',   cls: 'arfb-status--fallback' },
             [STATES.ERROR]:        { icon: 'fa-exclamation-triangle', text: 'Something went wrong',             cls: 'arfb-status--error' },
         };
@@ -523,7 +468,6 @@ class ARFallbackEngine {
         document.body.appendChild(this.container);
         document.body.style.overflow = 'hidden';
 
-        // Close button
         this.container.querySelector('#arfb-close-btn').addEventListener('click', () => this.stop());
     }
 }
@@ -538,7 +482,7 @@ async function isWebXRSupported() {
     }
 }
 
-// ─── Public API ──────────────────────────────────────────────────
+// ─── Expose to global scope (for inline scripts in menu.html) ────
 window.ARFallbackEngine   = ARFallbackEngine;
 window.isWebXRSupported   = isWebXRSupported;
 window.AR_STATES          = STATES;
